@@ -66,8 +66,6 @@ public String getMemberInfo(String memberNo) {
 }
 ```
 
-## Validation 처리
-
 ## 생성자 of
 
 -   불필요한 코드 작성을 줄일 수 있다.
@@ -105,6 +103,32 @@ public class CurrentLeagueUserStatusResponse {
 
 ## DB 업데이트 시 JPA save 대신 더티체킹
 
+```
+BannerMaster modifyBanner = bannerMasterRepository.findById(request.getBannerId()).orElse(null); // select 1차 캐시에 저장됨
+modifyBanner = setModify(modifyBanner, request); //객체 set
+bannerMasterRepository.save(modifyBanner);    // save로 update
+```
+
+-   프로젝트에서 DB에 update 시 find 쿼리 메소드로, 객체를 찾은 이후, save 쿼리 메소드를 사용하고 있었다. 문제는 없는 코드다. save 쿼리 메소드 구현부분을 보면, 데이터 조회 후, 데이터가 존재하면, merge 하기 때문이다.
+
+[##_Image|kage@mqMHv/btsDQfj35mJ/178CgEblFuUQ0tNGJxMMA1/img.png|CDM|1.3|{"originWidth":550,"originHeight":289,"style":"alignCenter","caption":"save 쿼리메소드 구현부분"}_##]
+
+-   휴먼에러 위험이 있다. 만약 의도치 않은 값을 set 한다면 그대로 DB에 반영되기 때문이다.
+    -   merge 라 모든 필드가 덮어 씌워짐
+-   더티체킹을 활용
+    -   find와 set으로만 update가 가능한데, 굳이 select 로직(`isNew` 함수 내부에 존재) 하나가 더 추가되는 것이다.
+        -   100개를 업데이트한다면, 1000개라면, 크기가 더 커질수록 select 쿼리 개수도 똑같이 늘어나는 것이다.
+    -   필요한 컬럼만 update 가능
+
 ## @Transactional(ReadOnly = true)
 
-[https://code-killer.tistory.com/200](https://code-killer.tistory.com/200)
+-   단순 조회만 하는 메소드에 해당 어노테이션을 붙여준다. 성능차이가 있다고 하지만, 테스트 결과 크게 차이는 나지 않고, 휴먼에러 방지를 위한 의도로 사용할 것이다.
+
+-   성능최적화를 위해 ReadOnly인 경우 Slave DB을 사용하는 경우도 있지만, 사용하고 있는 DB 구조(MMM 구조)에 적합하지 않아, 사용하지 않기로 하였다. 아래 포스팅 참고  
+    [https://code-killer.tistory.com/200](https://code-killer.tistory.com/200)
+
+ [Master와 Slave에 쿼리 분산(Feat. MMM 구조)
+
+개요 저번 서버 회의시간에, @Transaction(readonly = true) 옵션에 대해 얘기를 하던 중, slave DB의 dataSource 을 따로 생성해서, Select 쿼리는 slave로 그외 나머지 쿼리는 master로 보내는 방법이 나왔었다. 관
+
+code-killer.tistory.com](https://code-killer.tistory.com/200)
